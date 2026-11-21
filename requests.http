@@ -1,0 +1,63 @@
+@baseUrl = http://localhost:3001/api
+@apiKey = classroom-demo-key
+
+### List events
+GET {{baseUrl}}/events
+
+### Filter, sort, and paginate
+GET {{baseUrl}}/events?category=Workshop&isPublished=true&sortBy=title&order=asc&page=1&limit=5
+
+### Upcoming published events
+GET {{baseUrl}}/events/upcoming
+
+### One event
+GET {{baseUrl}}/events/2
+
+### Invalid id (400)
+GET {{baseUrl}}/events/nope
+
+### Event sessions
+GET {{baseUrl}}/events/2/sessions
+
+### Missing event (404)
+GET {{baseUrl}}/events/9999
+
+### Invalid pagination (400)
+GET {{baseUrl}}/events?page=hello
+
+### Invalid sort field (400)
+GET {{baseUrl}}/events?sortBy=location
+
+### Create event without key (401)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{ "title": "Missing key", "description": "Demo", "location": "Campus", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Talk", "isPublished": true }
+
+### Create event with wrong key (401)
+POST {{baseUrl}}/events
+x-api-key: wrong-key
+Content-Type: application/json
+
+{ "title": "Wrong key", "description": "Demo", "location": "Campus", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Talk", "isPublished": true }
+
+### Create event with valid key (201)
+POST {{baseUrl}}/events
+x-api-key: {{apiKey}}
+Content-Type: application/json
+
+{ "title": "Campus Film Night", "description": "A student film screening.", "location": "Lecture Hall A", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Arts", "isPublished": true }
+
+### Invalid body (400)
+POST {{baseUrl}}/events
+x-api-key: {{apiKey}}
+Content-Type: application/json
+
+{ "title": "", "description": "", "location": "", "eventDate": "not-a-date", "category": "Talk", "isPublished": "yes" }
+
+### Unknown body field (400)
+POST {{baseUrl}}/events
+x-api-key: {{apiKey}}
+Content-Type: application/json
+
+{ "title": "Extra field", "description": "Demo", "location": "Campus", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Talk", "isPublished": true, "admin": true }
