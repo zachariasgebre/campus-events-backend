@@ -57,3 +57,8 @@ The middleware logs every request and sets an `x-request-id`; the timing interce
 ## Testing
 
 Run the e2e suite with `npm run test:e2e`. It covers registration, duplicate and invalid registration, role injection rejection, login, generic credential failures, bearer-protected routes, tampered and expired tokens, refresh rotation and reuse, and logout.
+
+## API test evidence
+
+See [screenshots/README.md](screenshots/README.md) for the redacted Swagger screenshots and the test each one documents.
+
