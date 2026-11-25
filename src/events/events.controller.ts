@@ -7,15 +7,16 @@ import {
   ParseIntPipe,
   Post,
   Query,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiKeyGuard } from '../common/api-key.guard';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { TimingInterceptor } from '../common/timing.interceptor';
 import { CreateEventDto } from './dto/create-event.dto';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { EventsService } from './events.service';
 
+@ApiTags('events')
+@ApiBearerAuth()
 @Controller('events')
 @UseInterceptors(TimingInterceptor)
 export class EventsController {
@@ -48,7 +49,6 @@ export class EventsController {
   }
 
   @Post()
-  @UseGuards(ApiKeyGuard)
   create(@Body() dto: CreateEventDto) {
     return this.eventsService.create(dto);
   }
