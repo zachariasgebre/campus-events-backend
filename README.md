@@ -1,94 +1,59 @@
 # Campus Events NestJS Backend
 
-A learning-focused REST API for campus events. It uses NestJS with Express, in-memory arrays, DTO validation, request logging, a classroom API key guard, and a response timing interceptor.
+A learning-focused REST API for campus events. It uses NestJS with Express, in-memory event and user storage, DTO validation, request logging, JWT authentication, and response timing.
 
 ## Install and run
 
 ```bash
 npm install
 Copy-Item .env.example .env
+```
+
+Set distinct, long, random `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values in `.env` before starting the server. Never commit `.env` or real secrets. Then run:
+
+```bash
 npm run start:dev
 ```
 
-The API listens on `http://localhost:3001` and uses the `/api` global prefix. `PORT` and `FRONTEND_ORIGIN` can be changed in `.env`. CORS defaults to `http://localhost:3000`.
+The API listens at `http://localhost:3001/api`; Swagger UI is at `http://localhost:3001/api/docs`. Access tokens expire after 15 minutes and refresh tokens after 7 days. In-memory users and event data reset when the process restarts; this is a learning project, not production persistence.
 
-Set `CLASSROOM_API_KEY` in `.env` to a non-empty value before creating events. The example value (`classroom-demo-key`) is for local learning only and is not a sensitive or production credential. If the variable is unset or blank, event creation is denied.
+## JWT authentication flow
 
-## Routes
+- `POST /api/auth/register` accepts an email and 8–64 character password, hashes it using Argon2id, and returns only public user fields. New accounts receive the `student` role; registration does not accept client-selected roles.
+- `POST /api/auth/login` verifies the password hash and returns `accessToken`, `refreshToken`, and a safe user object. Unknown email and wrong password return the same 401 message.
+- `POST /api/auth/refresh` accepts the current refresh token, verifies its signature and stored Argon2 hash, then rotates it and returns a new pair. Reusing an old token fails.
+- `GET /api/auth/me` returns the authenticated user from `req.user`.
+- `POST /api/auth/logout` clears the stored refresh-token hash. An already issued access token may remain valid until its 15-minute expiry; immediate revocation requires additional server-side access-token state.
 
-| Method and route | Behavior | Success status |
+Access and refresh JWTs use separate secrets and HS256. The access payload contains user ID, email, and roles; the refresh payload contains only the user ID. JWT payloads are encoded, not encrypted, so never put passwords, hashes, or private information in them. Only register, login, and refresh are public. The global guard protects all other routes, including events.
+
+## API routes
+
+| Method and route | Access | Behavior |
 | --- | --- | --- |
-| `GET /api/events` | Filter, sort, and paginate events | 200 |
-| `GET /api/events/upcoming` | Events dated today or later | 200 |
-| `GET /api/events/:id` | One event | 200; 404 if missing |
-| `GET /api/events/:id/sessions` | Sessions for an event | 200; 404 if event missing |
-| `POST /api/events` | Create an event; requires `x-api-key` | 201; 400 validation error; 401 bad/missing key |
+| `POST /api/auth/register` | Public | Create an account (201); duplicate email returns 409 |
+| `POST /api/auth/login` | Public | Validate credentials and return tokens (200) |
+| `POST /api/auth/refresh` | Public | Rotate a refresh token (200) |
+| `GET /api/auth/me` | Bearer access token | Return current user |
+| `POST /api/auth/logout` | Bearer access token | Clear refresh session |
+| `GET /api/events` | Bearer access token | Filter, sort, and paginate events |
+| `GET /api/events/upcoming` | Bearer access token | Events dated today or later |
+| `GET /api/events/:id` | Bearer access token | One event |
+| `GET /api/events/:id/sessions` | Bearer access token | Event sessions |
+| `POST /api/events` | Bearer access token | Create an event |
 
-List query parameters:
+List query parameters: `category`, `isPublished` (`true`/`false`), `sortBy` (`eventDate`, `title`, `category`), `order` (`asc`, `desc`), positive integer `page`, and `limit` (1–100). Defaults are page 1 and limit 10.
 
-| Parameter | Accepted values | Default |
-| --- | --- | --- |
-| `category` | Any category string (case-insensitive match) | all |
-| `isPublished` | `true` or `false` | all |
-| `sortBy` | `eventDate`, `title`, `category` | `eventDate` |
-| `order` | `asc`, `desc` | `asc` |
-| `page` | Positive integer | `1` |
-| `limit` | Integer from 1 to 100 | `10` |
+See [requests.http](requests.http) for sample auth and protected-route calls. Swagger uses a single Bearer-authenticated document at `/api/docs`.
 
-Examples:
+## Validation and request lifecycle
 
-```bash
-curl "http://localhost:3001/api/events?category=Workshop&isPublished=true&page=1&limit=5"
-curl "http://localhost:3001/api/events/upcoming"
-curl "http://localhost:3001/api/events/2/sessions"
-curl -X POST http://localhost:3001/api/events \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: classroom-demo-key" \
-  -d '{"title":"Campus Film Night","description":"A student screening.","location":"Lecture Hall A","eventDate":"2030-06-15T10:00:00.000Z","category":"Arts","isPublished":true}'
-```
+The global ValidationPipe transforms DTOs, rejects unknown properties, and validates registration, login, refresh, event bodies, and list filters. IDs and pagination use integer parsing. Request handling is:
 
-See [requests.http](requests.http) for a runnable set of valid and invalid requests.
+`Middleware → Global JWT guard → Interceptor → Pipes → Controller → Service`
 
-## Data model and storage
-
-An event has `id` (number), `title`, `description`, `location`, `eventDate` (ISO date string), `category`, and `isPublished` (boolean). A session has `id`, `eventId`, `title`, `speaker`, `startTime`, and `endTime`.
-
-The service seeds ten events in Community, Workshop, Arts, and Talk categories, with past and future dates and both publication states. Five sessions belong to three seeded events. Data is held in private arrays inside `EventsService`; new event IDs auto-increment from the seed. All changes are lost when the process restarts. No database, user authentication, or persistent storage is included.
-
-## Request lifecycle
-
-For an HTTP request, the relevant lifecycle is:
-
-`Middleware → Guard → Interceptor → Pipe → Controller → Service → Interceptor → Response`
-
-The logging middleware runs for every request, adds an `x-request-id` response header, and logs the timestamp, method, and original URL. Nest guards run before interceptors; the API key guard is attached only to event creation. The timing interceptor logs request start and completion duration. Pipes validate and transform route/query/body values before controller methods run. The response payload is unchanged by the timing interceptor.
-
-## DTO validation
-
-`POST /api/events` requires non-empty strings for `title`, `description`, `location`, and `category`; an ISO date string for `eventDate`; and a boolean for `isPublished`. The global validation pipe transforms DTOs, strips no unknown data silently, and rejects unknown properties with 400 (`whitelist: true`, `forbidNonWhitelisted: true`). Query filters and sort fields are checked too. `id` uses `ParseIntPipe`; `page` and `limit` must be positive integers, and `limit` cannot exceed 100. Booleans in query strings must be exactly `true` or `false`.
-
-## How to see each cross-cutting component
-
-- **Middleware:** send any request and inspect the server console for an ISO timestamp, request ID, method, and URL. The response includes `x-request-id`.
-- **Guard:** POST without `x-api-key` or with a wrong key and receive 401. Also try an unset/blank `CLASSROOM_API_KEY`; it remains denied.
-- **Interceptor:** any events route logs `Request started` and `Request completed in ...ms` (or a failure duration).
-- **Pipes and validation:** `/api/events?page=hello` and `/api/events/nope` return 400; an invalid create body returns 400. A valid create with the key returns 201.
-
-## Middleware, guards, interceptors, and pipes
-
-| Component | When it runs | What it does here |
-| --- | --- | --- |
-| Middleware | Before route handling | Logs every request and sets a request ID |
-| Guard | Before controller/interceptor execution | Allows event creation only with the configured API key |
-| Interceptor | Around handler execution | Logs request timing without changing the payload |
-| Pipe | Before the handler receives a parameter | Parses and validates IDs, query values, and DTOs |
+The middleware logs every request and sets an `x-request-id`; the timing interceptor logs events request duration. Public route metadata bypasses only the JWT guard.
 
 ## Testing
 
-Run the e2e suite with:
-
-```bash
-npm run test:e2e
-```
-
-The suite covers listing, filtering, missing resources, valid and invalid event creation, key rejection, route parsing, pagination validation, upcoming-route precedence, and sessions. The API-key provider is set to a test value in the suite. To capture middleware and interceptor evidence for a submission, start the server with `npm run start:dev`, send requests from `requests.http`, and save the terminal output showing request IDs and timing lines.
+Run the e2e suite with `npm run test:e2e`. It covers registration, duplicate and invalid registration, role injection rejection, login, generic credential failures, bearer-protected routes, tampered and expired tokens, refresh rotation and reuse, and logout.

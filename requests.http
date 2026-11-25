@@ -1,63 +1,63 @@
 @baseUrl = http://localhost:3001/api
-@apiKey = classroom-demo-key
+@email = jwt-student@example.edu
+@password = CampusStudent7!
+# Paste the returned tokens into these variables after login/refresh.
+@accessToken = replace-with-access-token
+@refreshToken = replace-with-refresh-token
 
-### List events
+### Public registration (201)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Registration rejects privileged client roles (400)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "email": "admin@example.edu", "password": "{{password}}", "roles": ["admin"] }
+
+### Duplicate registration (409 after successful registration)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Public login (200)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Wrong password (401)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "WrongPassword7!" }
+
+### Protected profile without token (401)
+GET {{baseUrl}}/auth/me
+
+### Protected profile with access token (200)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{accessToken}}
+
+### Protected events list (200 with token)
 GET {{baseUrl}}/events
+Authorization: Bearer {{accessToken}}
 
-### Filter, sort, and paginate
-GET {{baseUrl}}/events?category=Workshop&isPublished=true&sortBy=title&order=asc&page=1&limit=5
-
-### Upcoming published events
-GET {{baseUrl}}/events/upcoming
-
-### One event
-GET {{baseUrl}}/events/2
-
-### Invalid id (400)
-GET {{baseUrl}}/events/nope
-
-### Event sessions
-GET {{baseUrl}}/events/2/sessions
-
-### Missing event (404)
-GET {{baseUrl}}/events/9999
-
-### Invalid pagination (400)
-GET {{baseUrl}}/events?page=hello
-
-### Invalid sort field (400)
-GET {{baseUrl}}/events?sortBy=location
-
-### Create event without key (401)
-POST {{baseUrl}}/events
+### Rotate refresh token (200); replace both variables with returned values
+POST {{baseUrl}}/auth/refresh
 Content-Type: application/json
 
-{ "title": "Missing key", "description": "Demo", "location": "Campus", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Talk", "isPublished": true }
+{ "refreshToken": "{{refreshToken}}" }
 
-### Create event with wrong key (401)
-POST {{baseUrl}}/events
-x-api-key: wrong-key
+### Logout (200)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{accessToken}}
+
+### Refresh after logout (401)
+POST {{baseUrl}}/auth/refresh
 Content-Type: application/json
 
-{ "title": "Wrong key", "description": "Demo", "location": "Campus", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Talk", "isPublished": true }
-
-### Create event with valid key (201)
-POST {{baseUrl}}/events
-x-api-key: {{apiKey}}
-Content-Type: application/json
-
-{ "title": "Campus Film Night", "description": "A student film screening.", "location": "Lecture Hall A", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Arts", "isPublished": true }
-
-### Invalid body (400)
-POST {{baseUrl}}/events
-x-api-key: {{apiKey}}
-Content-Type: application/json
-
-{ "title": "", "description": "", "location": "", "eventDate": "not-a-date", "category": "Talk", "isPublished": "yes" }
-
-### Unknown body field (400)
-POST {{baseUrl}}/events
-x-api-key: {{apiKey}}
-Content-Type: application/json
-
-{ "title": "Extra field", "description": "Demo", "location": "Campus", "eventDate": "2030-06-15T10:00:00.000Z", "category": "Talk", "isPublished": true, "admin": true }
+{ "refreshToken": "{{refreshToken}}" }
